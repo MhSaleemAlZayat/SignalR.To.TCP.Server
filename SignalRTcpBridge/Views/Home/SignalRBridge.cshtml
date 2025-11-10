@@ -1,0 +1,119 @@
+﻿@{
+    ViewData["Title"] = "SignalR TCP Bridge";
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SignalR TCP Bridge Test</title>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js'></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .message {
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+        }
+
+        .message-type {
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        #messages {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .timestamp {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <h1>🔌 SignalR TCP Bridge - Real-time Monitor</h1>
+        <div id='status' class='status disconnected'>Disconnected</div>
+        <div id='messages'></div>
+    </div>
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl('/tcpHub')
+            .withAutomaticReconnect()
+            .build();
+
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        let messageCount = 0;
+
+        connection.on('TcpConnectionStatus', (data) => {
+            statusDiv.className = 'status ' + (data.connected ? 'connected' : 'disconnected');
+            statusDiv.textContent = data.message;
+        });
+
+        connection.on('ReceiveTcpData', (data) => {
+            messageCount++;
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.innerHTML = `
+                <div class='timestamp'>[${messageCount}] ${new Date().toLocaleTimeString()}</div>
+                <div class='message-type'>Type: ${data.MessageType || 'Unknown'}</div>
+                <pre>${JSON.stringify(data.Data, null, 2)}</pre>
+            `;
+            messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
+
+            // Keep only last 50 messages
+            while (messagesDiv.children.length > 50) {
+                messagesDiv.removeChild(messagesDiv.lastChild);
+            }
+        });
+
+        connection.start()
+            .then(() => {
+                statusDiv.className = 'status connected';
+                statusDiv.textContent = 'Connected to SignalR';
+                console.log('Connected to SignalR hub');
+            })
+            .catch(err => {
+                statusDiv.textContent = 'Failed to connect: ' + err;
+                console.error(err);
+            });
+    </script>
+</body>
+</html>
