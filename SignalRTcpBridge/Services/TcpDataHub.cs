@@ -1,28 +1,36 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using Serilog;
 
 namespace SignalRTcpBridge_.Services;
 
 public class TcpDataHub : Hub
 {
-    private readonly ILogger<TcpDataHub> _logger;
-    public TcpDataHub(ILogger<TcpDataHub> logger)
-    {
-        _logger = logger;
-    }
-
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation($"Client connected: {Context.ConnectionId}");
+        var remoteEndPoint = Context.GetHttpContext()?.Connection.RemoteIpAddress?.ToString();
+
+        Log.Information("SignalR client connected {@ConnectionId} from {@RemoteEndPoint}",
+            Context.ConnectionId, remoteEndPoint);
+
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogInformation($"Client disconnected: {Context.ConnectionId}");
+        if (exception != null)
+        {
+            Log.Warning(exception, "SignalR client disconnected with error {@ConnectionId}",
+                Context.ConnectionId);
+        }
+        else
+        {
+            Log.Information("SignalR client disconnected {@ConnectionId}",
+                Context.ConnectionId);
+        }
+
         await base.OnDisconnectedAsync(exception);
     }
 
-    // Optional: Allow clients to request connection status
     public async Task GetConnectionStatus()
     {
         var service = Context.GetHttpContext()?.RequestServices
@@ -31,8 +39,12 @@ public class TcpDataHub : Hub
         var status = new
         {
             IsConnected = service?.IsConnected ?? false,
-            ConnectedClients = Context.Items.Count
+            TcpEndPoint = service?.TcpEndPoint,
+            ConnectedClients = Context.Items.Count,
+            RequestedBy = Context.ConnectionId
         };
+
+        Log.Debug("Connection status requested {@Status}", status);
 
         await Clients.Caller.SendAsync("ConnectionStatus", status);
     }

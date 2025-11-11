@@ -1,6 +1,21 @@
+using Serilog;
 using SignalRTcpBridge_.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add configuration
+//builder.Configuration.AddJsonFile("appsettings.json", optional: false);
+
+//builder.Host.UseSerilog((context, services, configuration) => configuration
+//        .ReadFrom.Configuration(new ConfigurationBuilder()
+//            .AddJsonFile("appsettings.json")
+//            .Build())
+//        .CreateLogger());
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration) // Use the context parameter
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext());
+
 
 // Add services to the container.
 builder.Services.AddControllersWithViews()
@@ -19,10 +34,19 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Add configuration
-builder.Configuration.AddJsonFile("appsettings.json", optional: false);
+
 
 var app = builder.Build();
+
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000}ms";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+        diagnosticContext.Set("RemoteIP", httpContext.Connection.RemoteIpAddress);
+    };
+});
 
 // Configure middleware
 app.UseCors();
